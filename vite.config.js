@@ -4,6 +4,18 @@ import tailwindcss from "@tailwindcss/vite";
 import godotPlugin from "vite-plugin-godot";
 
 export default defineConfig({
+  server: {
+    headers: {
+      "Cross-Origin-Opener-Policy": "same-origin",
+      "Cross-Origin-Embedder-Policy": "credentialless",
+    },
+  },
+  preview: {
+    headers: {
+      "Cross-Origin-Opener-Policy": "same-origin",
+      "Cross-Origin-Embedder-Policy": "credentialless",
+    },
+  },
   resolve: {
     alias: {
       react: "preact/compat",

@@ -5,9 +5,24 @@ import { showControlsToast } from "./components/toast.jsx";
 
 let gameStarted = false;
 
+async function waitForCrossOriginIsolation() {
+  if (window.crossOriginIsolated) return;
+  const deadline = Date.now() + 15000;
+  while (Date.now() < deadline) {
+    if (window.crossOriginIsolated) return;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  throw new Error(
+    "Cross-origin isolation is required for this build (Godot threads). Use HTTPS, allow the service worker, or host with COOP/COEP headers.",
+  );
+}
+
 async function startGame() {
   const engine = window.engine;
   if (!engine) return;
+
+  await waitForCrossOriginIsolation();
+
   engine.config.args = ["--main-pack", "CrazyCattle3D.pck"];
 
   await Promise.all([engine.init("CrazyCattle3D"), engine.preloadFile("CrazyCattle3D.pck")]);
