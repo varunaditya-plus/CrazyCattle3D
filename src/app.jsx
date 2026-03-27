@@ -17,16 +17,9 @@ async function waitForCrossOriginIsolation() {
   );
 }
 
-async function startGame() {
-  const engine = window.engine;
-  if (!engine) return;
-
-  await waitForCrossOriginIsolation();
-
-  engine.config.args = ["--main-pack", "CrazyCattle3D.pck"];
-
-  await Promise.all([engine.init("CrazyCattle3D"), engine.preloadFile("CrazyCattle3D.pck")]);
-  await engine.start();
+function bytesToPercent(current, total) {
+  if (total > 0) return Math.min(99, Math.round((current / total) * 100));
+  return null;
 }
 
 const downloads = [
@@ -39,12 +32,40 @@ const downloads = [
 export function App() {
   const gameContainerRef = useRef(null);
   const [fullscreen, setFullscreen] = useState(false);
+  const [gameLoading, setGameLoading] = useState(true);
+  const [loadBytes, setLoadBytes] = useState({ current: 0, total: 0 });
+  const [preparingEngine, setPreparingEngine] = useState(false);
 
   useEffect(() => {
     if (gameStarted) return;
     gameStarted = true;
 
-    void startGame().catch((err) => console.error(err));
+    const engine = window.engine;
+    if (!engine) {
+      setGameLoading(false);
+      return;
+    }
+
+    engine.config.onProgress = (current, total) => {
+      setLoadBytes({ current, total });
+      if (total > 0 && current >= total) {
+        setPreparingEngine(true);
+      }
+    };
+
+    void (async () => {
+      try {
+        await waitForCrossOriginIsolation();
+        engine.config.args = ["--main-pack", "CrazyCattle3D.pck"];
+        await Promise.all([engine.init("CrazyCattle3D"), engine.preloadFile("CrazyCattle3D.pck")]);
+        setPreparingEngine(true);
+        await engine.start();
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setGameLoading(false);
+      }
+    })();
   }, []);
 
   useEffect(() => {
@@ -71,6 +92,10 @@ export function App() {
     }
   }
 
+  const loadPercent = bytesToPercent(loadBytes.current, loadBytes.total);
+  const showDownloadLimited = loadPercent != null && !preparingEngine;
+  const showDownloadForever = loadBytes.total === 0 && !preparingEngine;
+
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4 gap-4">
       <h1 className="text-2xl md:text-2xl font-bold text-center">
@@ -80,6 +105,23 @@ export function App() {
         <canvas id="canvas" className="block !h-full !w-full outline-none">
           Your browser does not support the canvas tag.
         </canvas>
+        {gameLoading && (
+          <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black/85 px-6" role="progressbar">
+            <p className="text-sm font-medium text-white/90">
+              {preparingEngine ? "Preparing engine…" : "Downloading files…"}
+            </p>
+            <div className="h-2 w-full max-w-sm overflow-hidden rounded-full bg-white/15">
+              {preparingEngine || showDownloadForever ? (
+                <div className="loading-bar-forever h-full w-1/3 rounded-full bg-white/90" />
+              ) : (
+                <div className="h-full rounded-full bg-white/90 transition-[width] duration-150 ease-out" style={{ width: `${loadPercent}%` }}/>
+              )}
+            </div>
+            <p className="max-w-sm text-center font-mono text-xs leading-relaxed text-white/60 tabular-nums">
+              {preparingEngine ? (<span className="text-white/50">Compiling WebAssembly and starting the runtime...</span>) : showDownloadLimited ? (`${loadPercent}% complete`) : ("Loading game...")}
+            </p>
+          </div>
+        )}
       </div>
       <div className="flex w-full max-w-[960px] flex-wrap items-center justify-center gap-x-6 text-sm text-white/90">
         {downloads.map(({ href, icon: Icon, label }) => (
